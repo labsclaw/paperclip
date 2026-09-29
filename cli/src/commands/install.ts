@@ -58,12 +58,21 @@ export async function runCommandWithDiagnostics(
 export function resolveNpmCommand(
   platform = process.platform,
   nodeExecutable = process.execPath,
+  pathEnvironment = process.env.Path ?? process.env.PATH ?? "",
 ): NpmCommand {
   if (platform !== "win32") return { file: "npm", argsPrefix: [] };
 
-  const npmCliPath = path.join(path.dirname(nodeExecutable), "node_modules", "npm", "bin", "npm-cli.js");
-  if (!fs.existsSync(npmCliPath)) {
-    throw new Error(`Could not locate npm-cli.js next to Node at ${npmCliPath}. Reinstall Node.js with npm included.`);
+  const npmCliPaths = [
+    path.join(path.dirname(nodeExecutable), "node_modules", "npm", "bin", "npm-cli.js"),
+    ...pathEnvironment
+      .split(path.delimiter)
+      .filter(Boolean)
+      .filter((directory) => fs.existsSync(path.join(directory, "npm.cmd")))
+      .map((directory) => path.join(directory, "node_modules", "npm", "bin", "npm-cli.js")),
+  ];
+  const npmCliPath = npmCliPaths.find((candidate) => fs.existsSync(candidate));
+  if (!npmCliPath) {
+    throw new Error("Could not locate npm-cli.js from Node or npm.cmd on PATH. Reinstall Node.js with npm included.");
   }
   return { file: nodeExecutable, argsPrefix: [npmCliPath] };
 }
@@ -72,8 +81,8 @@ export async function runNpmCommand(
   args: string[],
   runCommand: CommandRunner,
   options?: Parameters<CommandRunner>[2],
+  command = resolveNpmCommand(),
 ): Promise<{ stdout: string; stderr: string }> {
-  const command = resolveNpmCommand();
   return runCommand(command.file, [...command.argsPrefix, ...args], options);
 }
 

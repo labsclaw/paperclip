@@ -12,6 +12,7 @@ import {
   resolveNpmCommand,
   resolveNpmInstallRequest,
   runCommandWithDiagnostics,
+  runNpmCommand,
 } from "../commands/install.js";
 import { uninstallCommand } from "../commands/uninstall.js";
 import { resolvePaperclipInstanceId } from "../config/home.js";
@@ -65,15 +66,22 @@ describe("managed install commands", () => {
 
   it("uses Node to execute npm-cli.js on Windows", () => {
     const nodeExecutable = path.join(root, "node", "node.exe");
-    const npmCliPath = path.join(root, "node", "node_modules", "npm", "bin", "npm-cli.js");
+    const npmDirectory = path.join(root, "npm-bin");
+    const npmCliPath = path.join(npmDirectory, "node_modules", "npm", "bin", "npm-cli.js");
     fs.mkdirSync(path.dirname(npmCliPath), { recursive: true });
+    fs.writeFileSync(path.join(npmDirectory, "npm.cmd"), "@echo off\n");
     fs.writeFileSync(npmCliPath, "// npm CLI fixture\n");
 
-    expect(resolveNpmCommand("win32", nodeExecutable)).toEqual({
+    const windowsCommand = resolveNpmCommand("win32", nodeExecutable, npmDirectory);
+    expect(windowsCommand).toEqual({
       file: nodeExecutable,
       argsPrefix: [npmCliPath],
     });
     expect(resolveNpmCommand("linux", nodeExecutable)).toEqual({ file: "npm", argsPrefix: [] });
+
+    const runCommand = vi.fn(async () => ({ stdout: '"2026.929.0"\n', stderr: "" }));
+    return runNpmCommand(["view", "paperclipai@canary", "version", "--json"], runCommand, undefined, windowsCommand)
+      .then(() => expect(runCommand).toHaveBeenCalledWith(nodeExecutable, [npmCliPath, "view", "paperclipai@canary", "version", "--json"], undefined));
   });
 
   it("resolves branch, tag, full SHA, and short SHA refs through GitHub", async () => {
