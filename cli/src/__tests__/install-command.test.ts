@@ -9,6 +9,7 @@ import {
   resolveGitHubRef,
   resolveGitInstallRequest,
   resolveGitInstallWorkspacePackages,
+  resolveNpmCommand,
   resolveNpmInstallRequest,
   runCommandWithDiagnostics,
 } from "../commands/install.js";
@@ -60,6 +61,19 @@ describe("managed install commands", () => {
     });
     expect(() => resolveNpmInstallRequest({ canary: true, version: "1.2.3" })).toThrow();
     expect(() => resolveNpmInstallRequest({ version: "latest" })).toThrow();
+  });
+
+  it("uses Node to execute npm-cli.js on Windows", () => {
+    const nodeExecutable = path.join(root, "node", "node.exe");
+    const npmCliPath = path.join(root, "node", "node_modules", "npm", "bin", "npm-cli.js");
+    fs.mkdirSync(path.dirname(npmCliPath), { recursive: true });
+    fs.writeFileSync(npmCliPath, "// npm CLI fixture\n");
+
+    expect(resolveNpmCommand("win32", nodeExecutable)).toEqual({
+      file: nodeExecutable,
+      argsPrefix: [npmCliPath],
+    });
+    expect(resolveNpmCommand("linux", nodeExecutable)).toEqual({ file: "npm", argsPrefix: [] });
   });
 
   it("resolves branch, tag, full SHA, and short SHA refs through GitHub", async () => {
