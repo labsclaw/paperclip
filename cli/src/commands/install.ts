@@ -55,6 +55,23 @@ export async function runCommandWithDiagnostics(
   }
 }
 
+/**
+ * Resolves the npm command invocation for the target platform.
+ *
+ * On Windows, npm is distributed as a shell/cmd wrapper (`npm.cmd`) rather than a direct
+ * executable binary, so `execFile("npm")` fails with `ENOENT`. To ensure portable execution,
+ * the CLI resolves the underlying `npm-cli.js` script and invokes it directly with Node.
+ *
+ * The lookup order on Windows is:
+ * 1. Beside the current Node executable (`<node_dir>/node_modules/npm/bin/npm-cli.js`).
+ * 2. Along PATH directories containing an `npm.cmd` entry.
+ *
+ * @param platform - The operating system platform (defaults to `process.platform`).
+ * @param nodeExecutable - Path to the Node executable (defaults to `process.execPath`).
+ * @param pathEnvironment - The PATH environment string to search (defaults to `process.env.PATH`).
+ * @returns The executable and arguments prefix required to run npm on this platform.
+ * @throws Error if `npm-cli.js` cannot be located on Windows, indicating Node/npm needs reinstalling.
+ */
 export function resolveNpmCommand(
   platform = process.platform,
   nodeExecutable = process.execPath,
