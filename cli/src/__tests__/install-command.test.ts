@@ -238,10 +238,16 @@ describe("managed install commands", () => {
 
   it("installs through the shim, reports provenance, and uninstalls without deleting user data", async () => {
     const version = "2026.720.0";
+    const npmArgsFor = (file: string, args: string[]) => {
+      if (file === "npm") return args;
+      if (file === process.execPath && path.basename(args[0] ?? "") === "npm-cli.js") return args.slice(1);
+      return undefined;
+    };
     const runCommand = vi.fn(async (file: string, args: string[], _options?: unknown) => {
-      if (file === "npm" && args[0] === "view") return { stdout: JSON.stringify(version), stderr: "" };
-      if (file === "npm" && args[0] === "install") {
-        const prefix = args[args.indexOf("--prefix") + 1];
+      const npmArgs = npmArgsFor(file, args);
+      if (npmArgs?.[0] === "view") return { stdout: JSON.stringify(version), stderr: "" };
+      if (npmArgs?.[0] === "install") {
+        const prefix = npmArgs[npmArgs.indexOf("--prefix") + 1];
         const entrypoint = path.join(prefix, "node_modules", "paperclipai", "dist", "index.js");
         fs.mkdirSync(path.dirname(entrypoint), { recursive: true });
         fs.writeFileSync(entrypoint, "#!/usr/bin/env node\n");
@@ -262,9 +268,9 @@ describe("managed install commands", () => {
     expect(fs.realpathSync(paths.currentPath)).toBe(fs.realpathSync(manifest!.payloadPath));
     expect(fs.existsSync(paths.shimPath)).toBe(true);
     const installCall = runCommand.mock.calls.find(
-      ([file, args]) => file === "npm" && args[0] === "install",
+      ([file, args]) => npmArgsFor(file, args)?.[0] === "install",
     );
-    expect(installCall?.[1]).toContain("--@paperclipai:registry=https://registry.npmjs.org");
+    expect(installCall && npmArgsFor(installCall[0], installCall[1])).toContain("--@paperclipai:registry=https://registry.npmjs.org");
     const installOptions = installCall?.[2] as { env?: NodeJS.ProcessEnv } | undefined;
     expect(installOptions?.env?.npm_config_userconfig).toContain(".npmrc-");
     const entrypoint = path.join(manifest!.payloadPath, "node_modules", "paperclipai", "dist", "index.js");
